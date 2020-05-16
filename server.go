@@ -2,34 +2,52 @@ package main
 
 import (
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	myMiddleware "github.com/labstack/echo/v4/middleware"
 )
 
+var (
+	CookieSessionLogin    = "SessionLogin"
+	LoginSuccessCookieVal = "LoginSuccess"
+)
+
 func main() {
 	e := echo.New()
 
+	// Custom Middleware
 	e.Use(CustomMiddleWareForServerHeader)
 
-	g := e.Group("/admin")
+	adminGroup := e.Group("/admin")
+	cookieGroup := e.Group("/cookie")
 
-	// Default Logging when call API /admin/**
-	// g.Use(myMiddleware.Logger())
+	// Default Logging Middleware when call API /admin/**
+	// adminGroup.Use(myMiddleware.Logger())
 
-	// Custom Logging when call API /admin/**
-	g.Use(myMiddleware.LoggerWithConfig(myMiddleware.LoggerConfig{
+	// Custom Logging Middleware when call API /admin/**
+	adminGroup.Use(myMiddleware.LoggerWithConfig(myMiddleware.LoggerConfig{
 		Format: `[${time_rfc3339} ${status} ${method} ${host}${path} ${latency_human}]` + "\n",
 	}))
 
-	g.Use(myMiddleware.BasicAuth(validateUser))
+	// BASIC Auth Middleware
+	adminGroup.Use(myMiddleware.BasicAuth(validateUser))
 
-	// ROUTING `G`
-	g.GET("/main", mainAdmin)
+	// COOKIE Middleware
+	cookieGroup.Use(checkCookie)
+
+	// ROUTING `cookieGroup`
+	cookieGroup.GET("/main", mainCookie)
+
+	// ROUTING `adminGroup`
+	adminGroup.GET("/main", mainAdmin)
 
 	// ROUTING `E`
+	e.GET("/login", login)
 	e.GET("/", welcome)
 	e.GET("/users/:id", getUser)
 	e.POST("/users/form", saveUserByForm)
@@ -42,6 +60,48 @@ func main() {
 	e.Logger.Fatal(e.Start(":1323"))
 }
 
+func login(c echo.Context) error {
+	username := c.QueryParam("username")
+	password := c.QueryParam("password")
+
+	if username == "firman" && password == "secret" {
+		cookie := &http.Cookie{} // this is same like --> cookie := new(http.Cookie)
+		cookie.Name = CookieSessionLogin
+		cookie.Value = LoginSuccessCookieVal
+		cookie.Expires = time.Now().Add(48 * time.Hour)
+
+		c.SetCookie(cookie)
+
+		return c.String(http.StatusOK, "SUCCESS: You ware logged in!")
+	}
+
+	return c.String(http.StatusUnauthorized, "WARNING: Make sure your account is coorect!")
+}
+
+func checkCookie(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		cookie, err := c.Cookie(CookieSessionLogin)
+
+		if err != nil {
+			if strings.Contains(err.Error(), "named cookie not present") {
+				return c.String(http.StatusUnauthorized, "WARNING: You don't have any cookie")
+			}
+			log.Println(err)
+			return err
+		}
+
+		if cookie.Value == LoginSuccessCookieVal {
+			return next(c)
+		}
+
+		return c.String(http.StatusUnauthorized, "WARNING: You don't have the right cookie")
+	}
+}
+
+func mainCookie(c echo.Context) error {
+	return c.String(http.StatusOK, "SUCCESS: you are on the secret cookie page!")
+}
+
 func CustomMiddleWareForServerHeader(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderServer, "ServerFirman/1.0")
@@ -51,7 +111,7 @@ func CustomMiddleWareForServerHeader(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func mainAdmin(c echo.Context) error {
-	return c.String(http.StatusOK, "hello you are in the admin page")
+	return c.String(http.StatusOK, "SUCCESS: hello you are in the admin page")
 }
 
 func validateUser(username, password string, c echo.Context) (bool, error) {
