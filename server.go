@@ -6,12 +6,30 @@ import (
 	"os"
 
 	"github.com/labstack/echo/v4"
+	myMiddleware "github.com/labstack/echo/v4/middleware"
 )
 
 func main() {
 	e := echo.New()
 
-	// ROUTING
+	e.Use(CustomMiddleWareForServerHeader)
+
+	g := e.Group("/admin")
+
+	// Default Logging when call API /admin/**
+	// g.Use(myMiddleware.Logger())
+
+	// Custom Logging when call API /admin/**
+	g.Use(myMiddleware.LoggerWithConfig(myMiddleware.LoggerConfig{
+		Format: `[${time_rfc3339} ${status} ${method} ${host}${path} ${latency_human}]` + "\n",
+	}))
+
+	g.Use(myMiddleware.BasicAuth(validateUser))
+
+	// ROUTING `G`
+	g.GET("/main", mainAdmin)
+
+	// ROUTING `E`
 	e.GET("/", welcome)
 	e.GET("/users/:id", getUser)
 	e.POST("/users/form", saveUserByForm)
@@ -22,6 +40,25 @@ func main() {
 
 	// SERVER HOST
 	e.Logger.Fatal(e.Start(":1323"))
+}
+
+func CustomMiddleWareForServerHeader(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		c.Response().Header().Set(echo.HeaderServer, "ServerFirman/1.0")
+		c.Response().Header().Set("My-Custom-Header", "ThisHaveNoMeaning")
+		return next(c)
+	}
+}
+
+func mainAdmin(c echo.Context) error {
+	return c.String(http.StatusOK, "hello you are in the admin page")
+}
+
+func validateUser(username, password string, c echo.Context) (bool, error) {
+	if username == "firman" && password == "secret" {
+		return true, nil
+	}
+	return false, nil
 }
 
 func welcome(c echo.Context) error {
