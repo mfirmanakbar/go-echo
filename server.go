@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	jwtGo "github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo/v4"
 	myMiddleware "github.com/labstack/echo/v4/middleware"
 )
@@ -15,6 +16,8 @@ import (
 var (
 	CookieSessionLogin    = "SessionLogin"
 	LoginSuccessCookieVal = "LoginSuccess"
+	UserIdExample         = "20022012"
+	SecretKeyExample      = "mLmHu8f1IxFo4dWurBG3jEf1Ex0wDZvvwND6eFmcaX"
 )
 
 func main() {
@@ -72,10 +75,45 @@ func login(c echo.Context) error {
 
 		c.SetCookie(cookie)
 
-		return c.String(http.StatusOK, "SUCCESS: You ware logged in!")
+		// TODO: create jwt token
+		token, err := createJwtToken()
+		if err != nil {
+			log.Println("Error when creating JWT token", err)
+			return c.String(http.StatusInternalServerError, "ERROR: something went wrong while creating JWT token!")
+		}
+
+		return c.JSON(http.StatusOK, map[string]string{
+			"message": "You ware logged in!",
+			"token":   token,
+		})
 	}
 
 	return c.String(http.StatusUnauthorized, "WARNING: Make sure your account is coorect!")
+}
+
+type JwtClaims struct {
+	Name string `json:"name"`
+	jwtGo.StandardClaims
+}
+
+func createJwtToken() (string, error) {
+	claims := JwtClaims{
+		"Firman",
+		jwtGo.StandardClaims{
+			Id:        UserIdExample,
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+		},
+	}
+
+	// we hash the jwt claims
+	rawToken := jwtGo.NewWithClaims(jwtGo.SigningMethodHS512, claims)
+
+	token, err := rawToken.SignedString([]byte(SecretKeyExample))
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 func checkCookie(next echo.HandlerFunc) echo.HandlerFunc {
@@ -129,7 +167,12 @@ func getUser(c echo.Context) error {
 	id := c.Param("id")
 	team := c.QueryParam("team")
 	member := c.QueryParam("member")
-	return c.String(http.StatusOK, "id: "+id+", team: "+team+", member: "+member)
+	// return c.String(http.StatusOK, "id: "+id+", team: "+team+", member: "+member)
+	return c.JSON(http.StatusOK, map[string]string{
+		"id":     id,
+		"team":   team,
+		"member": member,
+	})
 }
 
 func saveUserByForm(c echo.Context) error {
