@@ -18,6 +18,7 @@ var (
 	LoginSuccessCookieVal = "LoginSuccess"
 	UserIdExample         = "20022012"
 	SecretKeyExample      = "mLmHu8f1IxFo4dWurBG3jEf1Ex0wDZvvwND6eFmcaX"
+	SigningMethodExample  = "HS512"
 )
 
 func main() {
@@ -28,6 +29,7 @@ func main() {
 
 	adminGroup := e.Group("/admin")
 	cookieGroup := e.Group("/cookie")
+	jwtGroup := e.Group("/jwt")
 
 	// Default Logging Middleware when call API /admin/**
 	// adminGroup.Use(myMiddleware.Logger())
@@ -40,6 +42,12 @@ func main() {
 	// BASIC Auth Middleware
 	adminGroup.Use(myMiddleware.BasicAuth(validateUser))
 
+	// JWT Middleware
+	jwtGroup.Use(myMiddleware.JWTWithConfig(myMiddleware.JWTConfig{
+		SigningMethod: SigningMethodExample,
+		SigningKey:    []byte(SecretKeyExample),
+	}))
+
 	// COOKIE Middleware
 	cookieGroup.Use(checkCookie)
 
@@ -48,6 +56,9 @@ func main() {
 
 	// ROUTING `adminGroup`
 	adminGroup.GET("/main", mainAdmin)
+
+	// ROUTING `jwtGroup`
+	jwtGroup.GET("/main", mainJwt)
 
 	// ROUTING `E`
 	e.GET("/login", login)
@@ -61,6 +72,10 @@ func main() {
 
 	// SERVER HOST
 	e.Logger.Fatal(e.Start(":1323"))
+}
+
+func mainJwt(c echo.Context) error {
+	return c.String(http.StatusOK, "SUCCESS: you are on the top secret jwt page!")
 }
 
 func login(c echo.Context) error {
